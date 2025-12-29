@@ -58,12 +58,31 @@ def calculate_crae_crve(image):
 
 def medical_diagnosis(crae, crve):
     prompt = f"""
-    You are a Retinal Diagnostic AI. Analyze:
-    CRAE: {crae} µm (Normal: 196 ± 13)
-    CRVE: {crve} µm (Normal: 220 ± 15)
+    You are a Retinal Diagnostic AI. 
+    Analyze the following biometric data extracted from a patient's fundus image.
+
+    PATIENT METRICS:
+    1. CRAE (Arterial Width): {crae} µm
+       - Reference Normal: 196 ± 13 µm
     
-    Provide: 1. Biometric Audit, 2. Risk Assessment, 3. Potential Indications.
-    Keep it strictly clinical. Consult a professional.
+    2. CRVE (Venular Width): {crve} µm
+       - Reference Normal: 220 ± 15 µm
+
+    DIAGNOSTIC CRITERIA:
+    - Low CRAE (Narrowing) suggests Hypertension risk.
+    - High CRVE (Dilation) suggests Inflammation, Diabetes, or Ischemia.
+    - Deviations generally flag risk for: Ischemic Heart Disease or Stroke.
+
+    TASK:
+    Write a short Clinical Report in English with EXACTLY these three sections:
+    
+    1. **Biometric Audit**: Compare measured values against the Reference Normal.
+    2. **Risk Assessment**: Declare "AT RISK" or "NO SIGNIFICANT RISK" based on the deviation.
+    3. **Potential Indications**: Mention Hypertension, Stroke, or Ischemia if applicable.
+    
+    IMPORTANT:  Keep it analytical.
+    Always state that the patient must consult a medical professional. 
+    Do not use conversational fillers like "I hope this helps."
     """
     try:
         response = ollama.chat(model='medllama2:latest', messages=[{'role': 'user', 'content': prompt}])
