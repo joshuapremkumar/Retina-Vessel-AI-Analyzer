@@ -8,7 +8,7 @@ A diagnostic support tool developed for retinal vessel analysis. It automates th
 - **Medical AI**: Integration with `MedLLaMA2` via Ollama for clinical interpretation.
 - **UI**: Interactive Gradio dashboard.
   
-- Precision Segmentation: Uses Adaptive Gaussian Thresholding and CLAHE (Contrast Limited Adaptive Histogram Equalization) to isolate vessels even in low-contrast fundus images.
+Precision Segmentation: Uses Adaptive Gaussian Thresholding and CLAHE (Contrast Limited Adaptive Histogram Equalization) to isolate vessels even in low-contrast fundus images.
 
 Zhang-Suen Skeletonization: A robust thinning algorithm that preserves the topological connectivity of the vascular network.
 
@@ -58,6 +58,7 @@ python retina_analysis.py
 ________________________________________
 ⚖️ Medical Disclaimer
 IMPORTANT: This tool is provided for educational and research purposes as part of a hackathon submission. It is not a cleared medical device and is not intended for clinical use or to replace the judgment of a qualified ophthalmologist or cardiologist. Always consult a medical professional for diagnosis.
+
 
 
 
