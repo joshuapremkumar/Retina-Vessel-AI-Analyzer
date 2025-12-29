@@ -58,31 +58,58 @@ def calculate_crae_crve(image):
 
 def medical_diagnosis(crae, crve):
     prompt = f"""
-    You are a Retinal Diagnostic AI. 
-    Analyze the following biometric data extracted from a patient's fundus image.
+    SYSTEM ROLE:
+You are a medical report generation engine.
+You DO NOT ask questions.
+You DO NOT request clarification.
+You ONLY generate the report using the rules below.
 
-    PATIENT METRICS:
-    1. CRAE (Arterial Width): {crae} µm
-       - Reference Normal: 196 ± 13 µm
-    
-    2. CRVE (Venular Width): {crve} µm
-       - Reference Normal: 220 ± 15 µm
+ASSUMPTIONS:
+- CRAE and CRVE values are already computed correctly.
+- Reference ranges provided below are final and authoritative.
 
-    DIAGNOSTIC CRITERIA:
-    - Low CRAE (Narrowing) suggests Hypertension risk.
-    - High CRVE (Dilation) suggests Inflammation, Diabetes, or Ischemia.
-    - Deviations generally flag risk for: Ischemic Heart Disease or Stroke.
+REFERENCE NORMAL VALUES:
+- Normal CRAE: 196 ± 13 µm (Normal range: 183–209 µm)
+- Normal CRVE: 220 ± 15 µm (Normal range: 205–235 µm)
 
-    TASK:
-    Write a short Clinical Report in English with EXACTLY these three sections:
-    
-    1. **Biometric Audit**: Compare measured values against the Reference Normal.
-    2. **Risk Assessment**: Declare "AT RISK" or "NO SIGNIFICANT RISK" based on the deviation.
-    3. **Potential Indications**: Mention Hypertension, Stroke, or Ischemia if applicable.
-    
-    IMPORTANT:  Keep it analytical.
-    Always state that the patient must consult a medical professional. 
-    Do not use conversational fillers like "I hope this helps."
+PATIENT MEASUREMENTS:
+- CRAE: {crae} µm
+- CRVE: {crve} µm
+
+DECISION RULES (STRICT):
+1. If CRAE < 183 µm → Arterial narrowing → Hypertension risk
+2. If CRVE > 235 µm → Venular dilation → Inflammation / Diabetes / Ischemia risk
+3. If both CRAE and CRVE are within normal range → No significant retinal vascular risk
+4. Any deviation outside normal range → Declare AT RISK
+
+TASK:
+Generate a **concise clinical report** with EXACTLY these three sections
+and NO additional sections:
+
+1. **Biometric Audit**
+   - State whether CRAE and CRVE are within or outside normal limits.
+
+2. **Risk Assessment**
+   - Output ONLY one of the following phrases:
+     - "AT RISK"
+     - "NO SIGNIFICANT RISK"
+
+3. **Potential Indications**
+   - Mention Hypertension if CRAE is low
+   - Mention Stroke or Ischemia if CRVE is high
+   - If no abnormalities, state "No abnormal vascular indications detected."
+
+MANDATORY STATEMENT:
+End the report with:
+"Clinical correlation and consultation with a qualified medical professional is required."
+
+STYLE RULES:
+- Formal clinical tone
+- No conversational language
+- No questions
+- No explanations of methodology
+- No disclaimers beyond the mandatory statement
+
     """
     try:
         response = ollama.chat(model='medllama2:latest', messages=[{'role': 'user', 'content': prompt}])
