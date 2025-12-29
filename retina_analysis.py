@@ -59,7 +59,7 @@ def calculate_crae_crve(image):
 def medical_diagnosis(crae, crve):
     prompt = f"""
     SYSTEM ROLE:
-You are a medical report generation engine.
+You are a Retinal Diagnostic AI.
 You DO NOT ask questions.
 You DO NOT request clarification.
 You ONLY generate the report using the rules below.
