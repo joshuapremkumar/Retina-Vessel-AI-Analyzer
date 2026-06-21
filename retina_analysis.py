@@ -4,11 +4,50 @@ import numpy as np
 import ollama
 from skimage.morphology import skeletonize
 import sys
+import json
+import time
+import urllib.request
+import threading
+
+PENDO_TRACK_URL = "https://data.pendo.io/data/track"
+PENDO_INTEGRATION_KEY = "2b736422-7b4e-4721-9b6e-5259e83af672"
+
+
+def _pendo_track(event_name, properties=None):
+    """Send a track event to the Pendo server-side API in a background thread."""
+    def _send():
+        try:
+            payload = {
+                "type": "track",
+                "event": event_name,
+                "visitorId": "system",
+                "accountId": "system",
+                "timestamp": int(time.time() * 1000),
+                "properties": properties or {}
+            }
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                PENDO_TRACK_URL,
+                data=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-pendo-integration-key": PENDO_INTEGRATION_KEY
+                },
+                method="POST"
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+    threading.Thread(target=_send, daemon=True).start()
 
 # --- CORE LOGIC FUNCTIONS ---
 
 def calculate_crae_crve(image):
     if image is None:
+        _pendo_track("vessel_analysis_failed", {
+            "failure_reason": "image_was_none",
+            "image_was_none": True
+        })
         return 0, 0, None
 
     if len(image.shape) == 2:
@@ -41,7 +80,23 @@ def calculate_crae_crve(image):
     vessel_widths = vessel_widths[vessel_widths > 1.5]
 
     if len(vessel_widths) == 0:
+        _pendo_track("vessel_analysis_failed", {
+            "failure_reason": "no_vessel_widths",
+            "image_was_none": False,
+            "resized_image_width": target_width,
+            "resized_image_height": int(height * scale)
+        })
         return 0, 0, skeleton
+
+    _pendo_track("vessel_analysis_completed", {
+        "vessel_widths_count": int(len(vessel_widths)),
+        "resized_image_width": target_width,
+        "resized_image_height": int(height * scale),
+        "scale_factor": round(float(scale), 4),
+        "min_vessel_width": round(float(np.min(vessel_widths)), 2),
+        "max_vessel_width": round(float(np.max(vessel_widths)), 2),
+        "mean_vessel_width": round(float(np.mean(vessel_widths)), 2)
+    })
 
     sorted_widths = np.sort(vessel_widths)
     split_idx_low = int(len(sorted_widths) * 0.3)
@@ -53,6 +108,17 @@ def calculate_crae_crve(image):
     calibration_factor = 45.0 
     crae = round(raw_crae_px * calibration_factor, 2)
     crve = round(raw_crve_px * calibration_factor, 2)
+
+    _pendo_track("biometric_metrics_calculated", {
+        "crae_value": crae,
+        "crve_value": crve,
+        "calibration_factor": calibration_factor,
+        "arteriolar_widths_count": split_idx_low,
+        "venular_widths_count": int(len(sorted_widths) - split_idx_high),
+        "total_vessel_widths_count": int(len(sorted_widths)),
+        "crae_within_normal_range": 183 <= crae <= 209,
+        "crve_within_normal_range": 205 <= crve <= 235
+    })
 
     return crae, crve, skeleton
 
@@ -113,14 +179,49 @@ STYLE RULES:
     """
     try:
         response = ollama.chat(model='medllama2:latest', messages=[{'role': 'user', 'content': prompt}])
-        return response['message']['content']
+        report_content = response['message']['content']
+        _pendo_track("ai_clinical_report_generated", {
+            "crae_input": crae,
+            "crve_input": crve,
+            "model_name": "medllama2:latest",
+            "report_length_chars": len(report_content),
+            "risk_status": "AT RISK" if "AT RISK" in report_content.upper() else "NO SIGNIFICANT RISK",
+            "crae_below_normal": crae < 183,
+            "crve_above_normal": crve > 235
+        })
+        return report_content
     except Exception as e:
+        _pendo_track("ai_report_generation_failed", {
+            "crae_input": crae,
+            "crve_input": crve,
+            "error_message": str(e)[:200],
+            "model_name": "medllama2:latest"
+        })
         return f"Ollama Connection Error: Ensure Ollama app is running and 'medllama2' is pulled."
 
 def process_pipeline(image):
+    _pendo_track("fundus_image_uploaded", {
+        "image_height": int(image.shape[0]) if image is not None else 0,
+        "image_width": int(image.shape[1]) if image is not None else 0,
+        "image_channels": int(image.shape[2]) if image is not None and len(image.shape) > 2 else 1,
+        "has_alpha_channel": bool(image is not None and len(image.shape) > 2 and image.shape[2] == 4),
+        "is_grayscale": bool(image is not None and len(image.shape) == 2)
+    })
+
     crae, crve, skeleton = calculate_crae_crve(image)
     report = medical_diagnosis(crae, crve)
     metrics_text = f"### 📊 Vessel Measurements\n| Metric | Value |\n| :--- | :--- |\n| **CRAE** | {crae} µm |\n| **CRVE** | {crve} µm |"
+
+    _pendo_track("analysis_pipeline_completed", {
+        "crae_value": crae,
+        "crve_value": crve,
+        "has_vessel_map": skeleton is not None,
+        "report_generated_ok": not report.startswith("Ollama Connection Error"),
+        "report_length_chars": len(report),
+        "crae_within_normal_range": 183 <= crae <= 209,
+        "crve_within_normal_range": 205 <= crve <= 235
+    })
+
     return metrics_text, report, skeleton
 
 # --- PENDO INSTALL SCRIPT ---
